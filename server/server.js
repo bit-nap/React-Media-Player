@@ -50,9 +50,18 @@ const storage = multer.diskStorage({
   },
 });
 
+// Example: protect a route
+// app.post("/upload", authMiddleware, upload.single("media"), (req, res) => { ... });
+const { loginHandler, authMiddleware, refreshHandler } = require("./auth");
+
+// Login endpoint
+app.post("/login", loginHandler);
+
+app.post("/refresh", refreshHandler);
+
 const upload = multer({ storage });
 
-app.post("/upload", upload.single("media"), (req, res) => {
+app.post("/upload", authMiddleware, upload.single("media"), (req, res) => {
   const filePath = req.file ? req.file.path : null;
   if (!filePath) {
     return res.status(400).json({ success: false, error: "No file uploaded." });
@@ -70,14 +79,14 @@ app.post("/upload", upload.single("media"), (req, res) => {
   });
 });
 
-app.get("/files", (req, res) => {
+app.get("/files", authMiddleware, (req, res) => {
   fs.readdir(UPLOAD_DIR, (err, files) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(files);
   });
 });
 
-app.delete("/delete/:name", (req, res) => {
+app.delete("/delete/:name", authMiddleware, (req, res) => {
   const filename = req.params.name;
   const filePath = path.join(UPLOAD_DIR, filename);
 
@@ -99,12 +108,12 @@ app.delete("/delete/:name", (req, res) => {
 
 let currentSelected = null;
 
-app.post("/deselect", (req, res) => {
+app.post("/deselect", authMiddleware, (req, res) => {
   currentSelected = null;
   res.json({ selected: null });
 });
 
-app.post("/select", (req, res) => {
+app.post("/select", authMiddleware, (req, res) => {
   const { filename } = req.body;
   currentSelected = filename;
   res.json({ selected: filename });

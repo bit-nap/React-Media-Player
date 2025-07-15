@@ -35,7 +35,7 @@ export function Display() {
         <img
           src={mediaFolder + encodeURIComponent(media)}
           class="h-full max-w-full content-center inline-flex"
-          alt="Unable to load image"
+          alt="Unable to load"
         />
       </div>
     );
@@ -47,7 +47,7 @@ export function Display() {
           controls
           autoPlay
           class="w-full"
-          alt="Unable to load video"
+          alt="Unable to load"
         />
       </div>
     );

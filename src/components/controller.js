@@ -2,18 +2,19 @@ import { useEffect, useState } from "react";
 import { Button } from "./button";
 import { Card, CardContent } from "./card";
 import { Input } from "./input";
-import { v4 as uuidv4 } from "uuid";
 
 const globalURL = process.env.REACT_APP_SERVER_URL; // Change this to your server's URL if needed
 const STORAGE_KEY = "media-share-app";
 export const API_BASE = globalURL + ":" + process.env.REACT_APP_PORT; // Base URL for API requests
 
 export function Controller() {
+  const [passwordToggle, setPasswordToggle] = useState("password");
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
   const [inputUsername, setInputUsername] = useState("");
   const [inputPassword, setInputPassword] = useState("");
   const [mediaFiles, setMediaFiles] = useState([]);
+  const [hiddenFiles, setHiddenFiles] = useState([]);
   const [newFile, setNewFile] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -21,29 +22,85 @@ export function Controller() {
   // Load user from local storage
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (stored?.userId && stored?.username) {
-      setUserId(stored.userId);
+    if (stored?.token && stored?.username) {
+      setUserId(stored.token);
       setUsername(stored.username);
     }
   }, []);
 
   // Fetch media and current selection
   useEffect(() => {
-    fetchFiles();
-    fetchSelected();
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (stored?.token && stored?.username) {
+      fetchFiles();
+      fetchSelected();
+    }
   }, []);
+
+  // Refresh token if close to expiration
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const token = stored?.token;
+    if (token) {
+      const expiry = getTokenExpiry(token);
+      const now = Date.now();
+      if (expiry - now < 10 * 60 * 1000) {
+        // () sec/min ms/sec
+        // less than 10 min left
+        fetch(`${API_BASE}/refresh`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.token) {
+              localStorage.setItem(
+                STORAGE_KEY,
+                JSON.stringify({
+                  ...stored,
+                  token: data.token,
+                })
+              );
+              setUserId(data.token);
+            }
+          });
+      }
+    }
+  }, [userId]);
+
+  // Calculate expiration of token
+  function getTokenExpiry(token) {
+    if (!token) return 0;
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.exp * 1000; // ms
+  }
 
   // Fetch uploaded files
   const fetchFiles = async () => {
-    const res = await fetch(`${API_BASE}/files`);
-    const data = await res.json();
+    try {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const token = stored?.token;
+      const res = await fetch(`${API_BASE}/files`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          "Unable to get filenames. Session has expired. Please log in again"
+        );
+      }
 
-    // Convert raw filenames into objects with display data
-    const formatted = data.map((filename) => ({
-      name: filename,
-      url: `${API_BASE}/uploads/${filename}`,
-    }));
-    setMediaFiles(formatted);
+      // Convert raw filenames into objects with display data
+      const formatted = data.map((filename) => ({
+        name: filename,
+        url: `${API_BASE}/uploads/${filename}`,
+      }));
+      setMediaFiles(formatted);
+    } catch (error) {
+      alert(
+        error.message || "Credentials invalid. Please log out and log in again"
+      );
+    }
   };
 
   // Fetch current selected media
@@ -53,28 +110,60 @@ export function Controller() {
     setSelectedFile(data.selected);
   };
 
-  const handleLogin = () => {
-    if (!inputUsername.trim() || !inputPassword.trim()) return;
-    const newUserId = uuidv4();
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        userId: newUserId,
-        username: inputUsername.trim(),
-      })
+  // Hide/show file
+  const handleHideFile = (filename) => {
+    setHiddenFiles((prev) =>
+      prev.includes(filename)
+        ? prev.filter((f) => f !== filename)
+        : [...prev, filename]
     );
-    if (inputUsername.trim() && inputPassword.trim()) {
-      setUserId(newUserId);
-      setUsername(inputUsername.trim());
-    }
-    try {
-      fetchFiles();
-      fetchSelected();
-    } catch (error) {
-      console.log("login error:", error);
+  };
+
+  // UI password hide/show
+  const handlePasswordToggle = () => {
+    if (passwordToggle === "password") {
+      setPasswordToggle("");
+    } else {
+      setPasswordToggle("password");
     }
   };
 
+  // Log in and save info
+  const handleLogin = async () => {
+    if (!inputUsername.trim() || !inputPassword.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: inputUsername.trim(),
+          password: inputPassword.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Login failed");
+        return;
+      }
+      console.log(data)
+      // Store token and username in localStorage
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          token: data.token,
+          username: data.username,
+        })
+      );
+      setUserId(data.token);
+      setUsername(data.username);
+      fetchFiles();
+      fetchSelected();
+    } catch (error) {
+      alert("Login error: " + error.message);
+    }
+  };
+
+  // Log out and clear local storage
   const handleLogout = () => {
     localStorage.removeItem(STORAGE_KEY);
     setUserId("");
@@ -83,14 +172,15 @@ export function Controller() {
     setSelectedFile(null);
   };
 
+  // Send file to API
   const handleUpload = async () => {
     if (!newFile) return;
     // eslint-disable-next-line
-    const specialCharsRegex = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/;
+    const specialCharsRegex = /[!@#$%^&*()_+\-=\[\]{};':"\\|,<>\/?~]/;
     if (specialCharsRegex.test(newFile.name)) {
       console.log(newFile);
       window.confirm(
-        `File name invalid. Please remove any special characters from the file: "${newFile.name}"?`
+        `File name invalid. Please remove any spaces or special characters from the file: '${newFile.name}'.`
       );
       return;
     }
@@ -99,8 +189,11 @@ export function Controller() {
 
     try {
       setUploading(true);
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const token = stored?.token;
       await fetch(`${API_BASE}/upload`, {
         method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
       setNewFile(null);
@@ -112,17 +205,28 @@ export function Controller() {
     }
   };
 
+  // Select file to display
   const handleSelect = async (filename) => {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const token = stored?.token;
     try {
       if (selectedFile === filename) {
         await fetch(`${API_BASE}/deselect`, {
           method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         setSelectedFile("");
       } else {
         await fetch(`${API_BASE}/select`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: token
+            ? {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              }
+            : {
+                "Content-Type": "application/json",
+              },
           body: JSON.stringify({ filename }),
         });
         setSelectedFile(filename);
@@ -132,6 +236,7 @@ export function Controller() {
     }
   };
 
+  // Delete file from API
   const handleDelete = async (filename) => {
     if (!filename) return;
     const confirmDelete = window.confirm(
@@ -140,8 +245,11 @@ export function Controller() {
     if (!confirmDelete) return;
 
     try {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const token = stored?.token;
       const res = await fetch(`${API_BASE}/delete/${filename}`, {
         method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
       if (!res.ok) {
@@ -169,10 +277,20 @@ export function Controller() {
           onChange={(e) => setInputUsername(e.target.value)}
         />
         <Input
+          type={passwordToggle}
           placeholder="Enter a password"
           value={inputPassword}
           onChange={(e) => setInputPassword(e.target.value)}
         />
+        <div class="flex mt-1">
+          <Input
+            type="checkbox"
+            class="shrink-0 mt-0.5 border-gray-200 rounded-sm text-blue-600 focus:ring-blue-500"
+            value={passwordToggle}
+            onChange={(e) => handlePasswordToggle(e.target.value)}
+          />
+          <label class="text-sm text-gray-500 ms-3">Show password</label>
+        </div>
         <Button onClick={handleLogin}>Continue</Button>
       </div>
     );
@@ -194,6 +312,7 @@ export function Controller() {
           type="file"
           accept="image/*,video/*"
           onChange={(e) => setNewFile(e.target.files[0])}
+          class="flex flex-row break-all px-3 py-2 border border-gray-300 rounded w-full"
         />
         <Button
           className="mt-2 mx-4"
@@ -207,33 +326,45 @@ export function Controller() {
       {/* Media List */}
       <h2 className="text-xl font-semibold mb-2">Uploaded Files</h2>
       <div className="grid grid-cols-1 gap-4">
-        {mediaFiles.map((file, idx) => (
-          <Card key={idx}>
-            <CardContent className="space-y-2">
-              <div class="flex flex-row justify-between py-2">
-                <p className="font-semibold text-center break-all">
-                  {file.name}
-                </p>
+        {mediaFiles
+          .filter((file) => !hiddenFiles.includes(file.name))
+          .map((file, idx) => (
+            <Card key={idx}>
+              <CardContent className="space-y-2">
+                <div className="flex flex-row justify-between py-2">
+                  <p className="font-semibold text-center overflow-hidden">
+                    {file.name}
+                  </p>
+                  <div class="flex flex-row">
+                    <Button
+                      className="bg-red-600 hover:bg-red-700 mx-2"
+                      onClick={() => handleDelete(file.name)}
+                    >
+                      X
+                    </Button>
+                    <Button
+                      className="bg-yellow-500 hover:bg-yellow-600 mx-2"
+                      onClick={() => handleHideFile(file.name)}
+                    >
+                      Hide
+                    </Button>
+                  </div>
+                </div>
                 <Button
-                  className="bg-red-600 hover:bg-red-700 mx-4"
-                  onClick={() => handleDelete(file.name)}
+                  className={`w-full ${
+                    selectedFile === file.name
+                      ? "bg-green-600 hover:bg-green-700"
+                      : "bg-gray-300 hover:bg-gray-400"
+                  }`}
+                  onClick={() => handleSelect(file.name)}
                 >
-                  X
+                  {selectedFile === file.name
+                    ? "Selected"
+                    : "Select to Display"}
                 </Button>
-              </div>
-              <Button
-                className={`w-full ${
-                  selectedFile === file.name
-                    ? "bg-green-600 hover:bg-green-700"
-                    : "bg-gray-300 hover:bg-gray-400"
-                }`}
-                onClick={() => handleSelect(file.name)}
-              >
-                {selectedFile === file.name ? "Selected" : "Select to Display"}
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))}
       </div>
     </div>
   );
