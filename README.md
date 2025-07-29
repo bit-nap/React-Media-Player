@@ -5,7 +5,8 @@
 Run the following command to install all dependencies:
 
 ```
-npm i react dotenv express multer cors react-router-dom
+npm i react react-router-dom
+npm i dotenv express multer cors jsonwebtoken
 npm i -D tailwindcss@3 postcss autoprefixer
 npx tailwindcss init -p  
 ```

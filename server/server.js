@@ -23,7 +23,7 @@ app.use(express.json());
 
 // app.use("/uploads", express.static(UPLOAD_DIR));
 app.use(
-  "/uploads",
+  "/api/uploads",
   (req, res, next) => {
     const requested = decodeURIComponent(req.path);
     console.log(`[STATIC] Requested: ${requested}`);
@@ -55,13 +55,13 @@ const storage = multer.diskStorage({
 const { loginHandler, authMiddleware, refreshHandler } = require("./auth");
 
 // Login endpoint
-app.post("/login", loginHandler);
+app.post("/api/login", loginHandler);
 
-app.post("/refresh", refreshHandler);
+app.post("/api/refresh", refreshHandler);
 
 const upload = multer({ storage });
 
-app.post("/upload", authMiddleware, upload.single("media"), (req, res) => {
+app.post("/api/upload", authMiddleware, upload.single("media"), (req, res) => {
   const filePath = req.file ? req.file.path : null;
   if (!filePath) {
     return res.status(400).json({ success: false, error: "No file uploaded." });
@@ -79,14 +79,14 @@ app.post("/upload", authMiddleware, upload.single("media"), (req, res) => {
   });
 });
 
-app.get("/files", authMiddleware, (req, res) => {
+app.get("/api/files", authMiddleware, (req, res) => {
   fs.readdir(UPLOAD_DIR, (err, files) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(files);
   });
 });
 
-app.delete("/delete/:name", authMiddleware, (req, res) => {
+app.delete("/api/delete/:name", authMiddleware, (req, res) => {
   const filename = req.params.name;
   const filePath = path.join(UPLOAD_DIR, filename);
 
@@ -108,18 +108,18 @@ app.delete("/delete/:name", authMiddleware, (req, res) => {
 
 let currentSelected = null;
 
-app.post("/deselect", authMiddleware, (req, res) => {
+app.post("/api/deselect", authMiddleware, (req, res) => {
   currentSelected = null;
   res.json({ selected: null });
 });
 
-app.post("/select", authMiddleware, (req, res) => {
+app.post("/api/select", authMiddleware, (req, res) => {
   const { filename } = req.body;
   currentSelected = filename;
   res.json({ selected: filename });
 });
 
-app.get("/selected", (req, res) => {
+app.get("/api/selected", (req, res) => {
   res.json({ selected: currentSelected });
 });
 

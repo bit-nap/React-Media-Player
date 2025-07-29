@@ -8,15 +8,21 @@ export function Display() {
 
   useEffect(() => {
     let isMounted = true;
-    const fetchSelected = () => {
-      fetch(API_BASE + "/selected")
-        .then((res) => res.json())
-        .then((data) => {
-          if (isMounted) setMedia(data.selected);
-        });
+    const fetchSelected = async () => {
+      try {
+        const res = await fetch(API_BASE + "/selected");
+        if (!res.ok) {
+          // Optionally, you can setMedia(null) or handle error state
+          return;
+        }
+        const data = await res.json();
+        if (isMounted) setMedia(data.selected);
+      } catch (error) {
+        setMedia(null);
+        // console.error("Fetch error:", error);
+      }
     };
 
-    fetchSelected();
     const interval = setInterval(fetchSelected, 500); // Poll (1000 = 1 sec)
 
     return () => {

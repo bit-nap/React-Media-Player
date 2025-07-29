@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Button } from "./button";
-import { Card, CardContent } from "./card";
-import { Input } from "./input";
+import { Button } from "../components/button";
+import { Card, CardContent } from "../components/card";
+import { Input } from "../components/input";
 
 const globalURL = process.env.REACT_APP_SERVER_URL; // Change this to your server's URL if needed
 const STORAGE_KEY = "media-share-app";
-export const API_BASE = globalURL + ":" + process.env.REACT_APP_PORT; // Base URL for API requests
+export const API_BASE = globalURL + ":" + process.env.REACT_APP_PORT + "/api"; // Base URL for API requests
 
 export function Controller() {
   const [passwordToggle, setPasswordToggle] = useState("password");
@@ -18,6 +18,7 @@ export function Controller() {
   const [newFile, setNewFile] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [settingsMode, setSettingsMode] = useState(false); // Toggle for settings mode
 
   // Load user from local storage
   useEffect(() => {
@@ -105,9 +106,16 @@ export function Controller() {
 
   // Fetch current selected media
   const fetchSelected = async () => {
-    const res = await fetch(`${API_BASE}/selected`);
-    const data = await res.json();
-    setSelectedFile(data.selected);
+    try {
+      const res = await fetch(`${API_BASE}/selected`);
+      if (!res.ok) {
+        return;
+      }
+      const data = await res.json();
+      setSelectedFile(data.selected);
+    } catch (error) {
+      // console.error("Fetch error:", error);
+    }
   };
 
   // Hide/show file
@@ -132,6 +140,7 @@ export function Controller() {
   const handleLogin = async () => {
     if (!inputUsername.trim() || !inputPassword.trim()) return;
     try {
+      console.log(API_BASE);
       const res = await fetch(`${API_BASE}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -145,7 +154,7 @@ export function Controller() {
         alert(data.error || "Login failed");
         return;
       }
-      console.log(data)
+      console.log(data);
       // Store token and username in localStorage
       localStorage.setItem(
         STORAGE_KEY,
@@ -282,28 +291,39 @@ export function Controller() {
           value={inputPassword}
           onChange={(e) => setInputPassword(e.target.value)}
         />
-        <div class="flex mt-1">
+        <div className="flex flex-row w-1/6 mt-1">
           <Input
             type="checkbox"
-            class="shrink-0 mt-0.5 border-gray-200 rounded-sm text-blue-600 focus:ring-blue-500"
+            className="shrink-0 w-1/6 border-gray-200 rounded-sm text-blue-600 focus:ring-blue-500"
             value={passwordToggle}
             onChange={(e) => handlePasswordToggle(e.target.value)}
           />
-          <label class="text-sm text-gray-500 ms-3">Show password</label>
+          <label className="text-sm text-gray-500 ms-3">Show password</label>
         </div>
         <Button onClick={handleLogin}>Continue</Button>
       </div>
     );
   }
 
-  // Media selection screen
+  // Media selection/settings screen
   return (
     <div className="p-6 max-w-4xl mx-auto min-h-screen">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Welcome, {username}</h1>
-        <Button className="bg-red-600 hover:bg-red-700" onClick={handleLogout}>
-          Log Out
-        </Button>
+        <div className="flex flex-row gap-2">
+          <Button
+            className={`bg-blue-500 hover:bg-blue-600`}
+            onClick={() => setSettingsMode((prev) => !prev)}
+          >
+            {settingsMode ? "Done" : "Settings"}
+          </Button>
+          <Button
+            className="bg-red-600 hover:bg-red-700"
+            onClick={handleLogout}
+          >
+            Log Out
+          </Button>
+        </div>
       </div>
 
       {/* Upload Section */}
@@ -312,7 +332,7 @@ export function Controller() {
           type="file"
           accept="image/*,video/*"
           onChange={(e) => setNewFile(e.target.files[0])}
-          class="flex flex-row break-all px-3 py-2 border border-gray-300 rounded w-full"
+          className="flex flex-row break-all px-3 py-2 border border-gray-300 rounded w-full"
         />
         <Button
           className="mt-2 mx-4"
@@ -326,30 +346,34 @@ export function Controller() {
       {/* Media List */}
       <h2 className="text-xl font-semibold mb-2">Uploaded Files</h2>
       <div className="grid grid-cols-1 gap-4">
-        {mediaFiles
-          .filter((file) => !hiddenFiles.includes(file.name))
-          .map((file, idx) => (
-            <Card key={idx}>
-              <CardContent className="space-y-2">
-                <div className="flex flex-row justify-between py-2">
-                  <p className="font-semibold text-center overflow-hidden">
-                    {file.name}
-                  </p>
-                  <div class="flex flex-row">
-                    <Button
-                      className="bg-red-600 hover:bg-red-700 mx-2"
-                      onClick={() => handleDelete(file.name)}
-                    >
-                      X
-                    </Button>
-                    <Button
-                      className="bg-yellow-500 hover:bg-yellow-600 mx-2"
-                      onClick={() => handleHideFile(file.name)}
-                    >
-                      Hide
-                    </Button>
-                  </div>
+        {mediaFiles.map((file, idx) => (
+          <Card key={idx}>
+            <CardContent className="space-y-2">
+              <div className="flex flex-row justify-between py-2">
+                <p className="font-semibold text-center overflow-hidden">
+                  {file.name}
+                </p>
+                <div className="flex flex-row">
+                  <Button
+                    className="bg-red-600 hover:bg-red-700 mx-2"
+                    onClick={() => handleDelete(file.name)}
+                  >
+                    X
+                  </Button>
                 </div>
+              </div>
+              {settingsMode ? (
+                <Button
+                  className={`w-full ${
+                    hiddenFiles.includes(file.name)
+                      ? "bg-gray-400 hover:bg-gray-500"
+                      : "bg-yellow-500 hover:bg-yellow-600"
+                  }`}
+                  onClick={() => handleHideFile(file.name)}
+                >
+                  {hiddenFiles.includes(file.name) ? "Show" : "Hide"}
+                </Button>
+              ) : (
                 <Button
                   className={`w-full ${
                     selectedFile === file.name
@@ -362,9 +386,10 @@ export function Controller() {
                     ? "Selected"
                     : "Select to Display"}
                 </Button>
-              </CardContent>
-            </Card>
-          ))}
+              )}
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );

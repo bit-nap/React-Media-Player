@@ -20,6 +20,8 @@
 
 .env
 /public/uploads/*
+deploy.sh
+./deploy
 
 npm-debug.log*
 yarn-debug.log*
