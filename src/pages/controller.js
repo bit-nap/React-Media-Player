@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Button } from "../components/button";
 import { Card, CardContent } from "../components/card";
 import { Input } from "../components/input";
+import { useNavigate } from "react-router";
 
 const globalURL = process.env.REACT_APP_SERVER_URL; // Change this to your server's URL if needed
-const STORAGE_KEY = "media-share-app";
+export const STORAGE_KEY = "media-share-app";
 export const API_BASE = globalURL + ":" + process.env.REACT_APP_PORT + "/api"; // Base URL for API requests
 
 export function Controller() {
@@ -14,11 +15,11 @@ export function Controller() {
   const [inputUsername, setInputUsername] = useState("");
   const [inputPassword, setInputPassword] = useState("");
   const [mediaFiles, setMediaFiles] = useState([]);
-  const [hiddenFiles, setHiddenFiles] = useState([]);
   const [newFile, setNewFile] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [settingsMode, setSettingsMode] = useState(false); // Toggle for settings mode
+
+  let navigate = useNavigate();
 
   // Load user from local storage
   useEffect(() => {
@@ -116,15 +117,6 @@ export function Controller() {
     } catch (error) {
       // console.error("Fetch error:", error);
     }
-  };
-
-  // Hide/show file
-  const handleHideFile = (filename) => {
-    setHiddenFiles((prev) =>
-      prev.includes(filename)
-        ? prev.filter((f) => f !== filename)
-        : [...prev, filename]
-    );
   };
 
   // UI password hide/show
@@ -291,10 +283,10 @@ export function Controller() {
           value={inputPassword}
           onChange={(e) => setInputPassword(e.target.value)}
         />
-        <div className="flex flex-row w-1/6 mt-1">
+        <div className="flex flex-row w-2/12 justify-center mt-1">
           <Input
             type="checkbox"
-            className="shrink-0 w-1/6 border-gray-200 rounded-sm text-blue-600 focus:ring-blue-500"
+            className="shrink-0 w-4 border-gray-200 rounded-sm text-blue-600 focus:ring-blue-500"
             value={passwordToggle}
             onChange={(e) => handlePasswordToggle(e.target.value)}
           />
@@ -313,9 +305,9 @@ export function Controller() {
         <div className="flex flex-row gap-2">
           <Button
             className={`bg-blue-500 hover:bg-blue-600`}
-            onClick={() => setSettingsMode((prev) => !prev)}
+            onClick={() => navigate("settings")}
           >
-            {settingsMode ? "Done" : "Settings"}
+            Settings
           </Button>
           <Button
             className="bg-red-600 hover:bg-red-700"
@@ -362,31 +354,17 @@ export function Controller() {
                   </Button>
                 </div>
               </div>
-              {settingsMode ? (
-                <Button
-                  className={`w-full ${
-                    hiddenFiles.includes(file.name)
-                      ? "bg-gray-400 hover:bg-gray-500"
-                      : "bg-yellow-500 hover:bg-yellow-600"
-                  }`}
-                  onClick={() => handleHideFile(file.name)}
-                >
-                  {hiddenFiles.includes(file.name) ? "Show" : "Hide"}
-                </Button>
-              ) : (
-                <Button
-                  className={`w-full ${
-                    selectedFile === file.name
-                      ? "bg-green-600 hover:bg-green-700"
-                      : "bg-gray-300 hover:bg-gray-400"
-                  }`}
-                  onClick={() => handleSelect(file.name)}
-                >
-                  {selectedFile === file.name
-                    ? "Selected"
-                    : "Select to Display"}
-                </Button>
-              )}
+
+              <Button
+                className={`w-full ${
+                  selectedFile === file.name
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-gray-300 hover:bg-gray-400"
+                }`}
+                onClick={() => handleSelect(file.name)}
+              >
+                {selectedFile === file.name ? "Selected" : "Select to Display"}
+              </Button>
             </CardContent>
           </Card>
         ))}

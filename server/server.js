@@ -106,6 +106,47 @@ app.delete("/api/delete/:name", authMiddleware, (req, res) => {
   });
 });
 
+// Directory to store user settings
+const SETTINGS_DIR = path.join(__dirname, "../public/settings");
+if (!fs.existsSync(SETTINGS_DIR))
+  fs.mkdirSync(SETTINGS_DIR, { recursive: true });
+
+// Save user settings (playlists) as JSON file named after the account
+app.post("/api/settings", authMiddleware, (req, res) => {
+  const { account, playlists } = req.body;
+  if (!account || !playlists) {
+    return res
+      .status(400)
+      .json({ error: "Missing account or playlists in request body." });
+  }
+  const settingsPath = path.join(SETTINGS_DIR, `${account}.json`);
+  fs.writeFile(settingsPath, JSON.stringify({ playlists }, null, 2), (err) => {
+    if (err) {
+      return res.status(500).json({ error: "Failed to save settings." });
+    }
+    res.json({ success: true });
+  });
+});
+
+// Get user settings (playlists) from JSON file
+app.get("/api/settings/:account", authMiddleware, (req, res) => {
+  const account = req.params.account;
+  const settingsPath = path.join(SETTINGS_DIR, `${account}.json`);
+  fs.readFile(settingsPath, "utf8", (err, data) => {
+    if (err) {
+      return res
+        .status(404)
+        .json({ error: "Settings not found for this account." });
+    }
+    try {
+      const settings = JSON.parse(data);
+      res.json(settings);
+    } catch (parseErr) {
+      res.status(500).json({ error: "Failed to parse settings file." });
+    }
+  });
+});
+
 let currentSelected = null;
 
 app.post("/api/deselect", authMiddleware, (req, res) => {

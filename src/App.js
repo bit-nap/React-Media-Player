@@ -11,7 +11,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/display" element={<Display />} />
         <Route path="/controller" element={<Controller />} />
-        <Route path="/settings" element={<Setting />}></Route>
+        <Route path="/controller/settings" element={<Setting />}></Route>
       </Routes>
     </BrowserRouter>
   );
