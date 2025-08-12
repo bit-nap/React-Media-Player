@@ -14,10 +14,8 @@ export function Controller() {
   const [username, setUsername] = useState("");
   const [inputUsername, setInputUsername] = useState("");
   const [inputPassword, setInputPassword] = useState("");
-  const [mediaFiles, setMediaFiles] = useState([]);
-  const [newFile, setNewFile] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [playlists, setPlaylists] = useState([]);
 
   let navigate = useNavigate();
 
@@ -27,15 +25,57 @@ export function Controller() {
     if (stored?.token && stored?.username) {
       setUserId(stored.token);
       setUsername(stored.username);
+      fetchSelected();
     }
   }, []);
 
-  // Fetch media and current selection
+  // Fetch media and playlists
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+
+    // Fetch account playlists
+    const fetchPlaylists = async () => {
+      try {
+        if (!stored.token || !stored.username) return;
+        const res = await fetch(`${API_BASE}/settings/${stored.username}`, {
+          headers: stored.token
+            ? { Authorization: `Bearer ${stored.token}` }
+            : {},
+        });
+        const data = await res.json();
+        if (res.status === 404) {
+          const res = await fetch(`${API_BASE}/settings`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${stored.token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              account: stored.username.trim(),
+              playlists: [],
+            }),
+          });
+          if (!res.ok) {
+            console.error("Upload playlists failed");
+          }
+
+          return;
+        }
+        if (!res.ok) {
+          console.error("Failed to fetch playlists");
+          return;
+        }
+        setPlaylists(data.playlists);
+      } catch (error) {
+        alert(
+          error.message ||
+            "Credentials invalid. Please log out and log in again"
+        );
+      }
+    };
+
     if (stored?.token && stored?.username) {
-      fetchFiles();
-      fetchSelected();
+      fetchPlaylists();
     }
   }, []);
 
@@ -68,7 +108,7 @@ export function Controller() {
           });
       }
     }
-  }, [userId]);
+  }, []);
 
   // Calculate expiration of token
   function getTokenExpiry(token) {
@@ -76,34 +116,6 @@ export function Controller() {
     const payload = JSON.parse(atob(token.split(".")[1]));
     return payload.exp * 1000; // ms
   }
-
-  // Fetch uploaded files
-  const fetchFiles = async () => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      const token = stored?.token;
-      const res = await fetch(`${API_BASE}/files`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(
-          "Unable to get filenames. Session has expired. Please log in again"
-        );
-      }
-
-      // Convert raw filenames into objects with display data
-      const formatted = data.map((filename) => ({
-        name: filename,
-        url: `${API_BASE}/uploads/${filename}`,
-      }));
-      setMediaFiles(formatted);
-    } catch (error) {
-      alert(
-        error.message || "Credentials invalid. Please log out and log in again"
-      );
-    }
-  };
 
   // Fetch current selected media
   const fetchSelected = async () => {
@@ -157,7 +169,6 @@ export function Controller() {
       );
       setUserId(data.token);
       setUsername(data.username);
-      fetchFiles();
       fetchSelected();
     } catch (error) {
       alert("Login error: " + error.message);
@@ -169,41 +180,7 @@ export function Controller() {
     localStorage.removeItem(STORAGE_KEY);
     setUserId("");
     setUsername("");
-    setMediaFiles([]);
     setSelectedFile(null);
-  };
-
-  // Send file to API
-  const handleUpload = async () => {
-    if (!newFile) return;
-    // eslint-disable-next-line
-    const specialCharsRegex = /[!@#$%^&*()_+\-=\[\]{};':"\\|,<>\/?~]/;
-    if (specialCharsRegex.test(newFile.name)) {
-      console.log(newFile);
-      window.confirm(
-        `File name invalid. Please remove any spaces or special characters from the file: '${newFile.name}'.`
-      );
-      return;
-    }
-    const formData = new FormData();
-    formData.append("media", newFile);
-
-    try {
-      setUploading(true);
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      const token = stored?.token;
-      await fetch(`${API_BASE}/upload`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
-      setNewFile(null);
-      await fetchFiles();
-    } catch (error) {
-      console.error("Upload error:", error);
-    } finally {
-      setUploading(false);
-    }
   };
 
   // Select file to display
@@ -237,36 +214,6 @@ export function Controller() {
     }
   };
 
-  // Delete file from API
-  const handleDelete = async (filename) => {
-    if (!filename) return;
-    const confirmDelete = window.confirm(
-      `Are you sure you want to delete "${filename}"?`
-    );
-    if (!confirmDelete) return;
-
-    try {
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      const token = stored?.token;
-      const res = await fetch(`${API_BASE}/delete/${filename}`, {
-        method: "DELETE",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Delete failed: \n${errorText}`);
-      }
-
-      // Refresh state
-      await fetchFiles();
-      await fetchSelected();
-    } catch (error) {
-      console.error("Delete error:", error.message);
-      alert(`Failed to delete file: \n${error.message}`);
-    }
-  };
-
   // Login screen
   if (!userId) {
     return (
@@ -296,6 +243,7 @@ export function Controller() {
       </div>
     );
   }
+  console.log(playlists);
 
   // Media selection/settings screen
   return (
@@ -318,55 +266,37 @@ export function Controller() {
         </div>
       </div>
 
-      {/* Upload Section */}
-      <div className="mb-6">
-        <Input
-          type="file"
-          accept="image/*,video/*"
-          onChange={(e) => setNewFile(e.target.files[0])}
-          className="flex flex-row break-all px-3 py-2 border border-gray-300 rounded w-full"
-        />
-        <Button
-          className="mt-2 mx-4"
-          onClick={handleUpload}
-          disabled={!newFile || uploading}
-        >
-          {uploading ? "Uploading..." : "Upload Media"}
-        </Button>
-      </div>
-
       {/* Media List */}
-      <h2 className="text-xl font-semibold mb-2">Uploaded Files</h2>
-      <div className="grid grid-cols-1 gap-4">
-        {mediaFiles.map((file, idx) => (
-          <Card key={idx}>
-            <CardContent className="space-y-2">
-              <div className="flex flex-row justify-between py-2">
-                <p className="font-semibold text-center overflow-hidden">
-                  {file.name}
-                </p>
-                <div className="flex flex-row">
-                  <Button
-                    className="bg-red-600 hover:bg-red-700 mx-2"
-                    onClick={() => handleDelete(file.name)}
-                  >
-                    X
-                  </Button>
-                </div>
-              </div>
+      <h2 className="text-xl font-semibold mb-2">Media</h2>
+      <div className="grid grid-cols-1">
+        {playlists.map(({ name, songs }, idx) => (
+          <>
+            <h3 className="font-semibold w-fit mt-2">{name}</h3>
+            <Card key={idx} className="border border-gray-500 px-4 py-2">
+              <CardContent className="mt-0 divide-y-2">
+                {songs.map((songName, i) => (
+                  <div className="flex flex-row justify-between py-2">
+                    <p className="font-semibold text-center overflow-hidden">
+                      {songName}
+                    </p>
 
-              <Button
-                className={`w-full ${
-                  selectedFile === file.name
-                    ? "bg-green-600 hover:bg-green-700"
-                    : "bg-gray-300 hover:bg-gray-400"
-                }`}
-                onClick={() => handleSelect(file.name)}
-              >
-                {selectedFile === file.name ? "Selected" : "Select to Display"}
-              </Button>
-            </CardContent>
-          </Card>
+                    <Button
+                      className={`w-1/3 ${
+                        selectedFile === songName
+                          ? "bg-green-600 hover:bg-green-700"
+                          : "bg-gray-300 hover:bg-gray-400"
+                      }`}
+                      onClick={() => handleSelect(songName)}
+                    >
+                      {selectedFile === songName
+                        ? "Selected"
+                        : "Select to Display"}
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </>
         ))}
       </div>
     </div>

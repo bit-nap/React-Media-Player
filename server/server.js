@@ -90,8 +90,49 @@ app.delete("/api/delete/:name", authMiddleware, (req, res) => {
   const filename = req.params.name;
   const filePath = path.join(UPLOAD_DIR, filename);
 
-  console.log(`Looking for: ${filename}`);
+  try {
+    const files = fs.readdirSync(SETTINGS_DIR);
 
+    files.forEach((file) => {
+      const filePath = path.join(SETTINGS_DIR, file);
+
+      // Only process .json files
+      if (path.extname(filePath) !== ".json") return;
+      const data = fs.readFileSync(filePath, "utf-8");
+      let json;
+      try {
+        json = JSON.parse(data);
+      } catch (err) {
+        console.error(`Invalid JSON in file ${file}:`, err);
+        return;
+      }
+
+      let modified = false;
+      if (Array.isArray(json.playlists)) {
+        json.playlists.forEach((playlist) => {
+          if (Array.isArray(playlist.songs)) {
+            const originalLength = playlist.songs.length;
+            playlist.songs = playlist.songs.filter((song) => song !== filename);
+            if (playlist.songs.length !== originalLength) {
+              modified = true;
+            }
+          }
+        });
+      }
+
+      if (modified) {
+        fs.writeFileSync(filePath, JSON.stringify(json, null, 2), "utf-8");
+      }
+    });
+  } catch (err) {
+    console.error("Error processing files:", err);
+    res.status(500).json({
+      error: "Internal server error",
+      message: "Failed to delete file from existing playlists",
+    });
+  }
+
+  // Remove file from FS
   fs.unlink(filePath, (err) => {
     if (err) {
       return res
@@ -102,7 +143,10 @@ app.delete("/api/delete/:name", authMiddleware, (req, res) => {
     if (currentSelected === filename) {
       currentSelected = null;
     }
-    res.json({ success: true });
+    res.json({
+      success: true,
+      message: `Deleted "${filename}" from all playlists.`,
+    });
   });
 });
 
