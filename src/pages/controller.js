@@ -229,14 +229,14 @@ export function Controller() {
           value={inputPassword}
           onChange={(e) => setInputPassword(e.target.value)}
         />
-        <div className="flex flex-row w-1/4 justify-center mt-1">
+        <div className="flex flex-row w-1/4 h-5 justify-center items-center mt-1">
           <Input
             type="checkbox"
-            className="shrink-0 w-3 border-gray-200 rounded-sm text-blue-600 focus:ring-blue-500"
+            className="shrink-0 h-fit w-fit border-gray-200 rounded-sm text-blue-600 focus:ring-blue-500"
             value={passwordToggle}
             onChange={(e) => handlePasswordToggle(e.target.value)}
           />
-          <label className="text-sm text-gray-500 ms-3">Show password</label>
+          <label className="text-sm text-gray-500 ms-2">Show password</label>
         </div>
         <Button onClick={handleLogin}>Continue</Button>
       </div>
@@ -275,7 +275,7 @@ export function Controller() {
               <CardContent className="mt-0 divide-y-2">
                 {songs.map((songName, i) => (
                   <div className="flex flex-row justify-between py-2">
-                    <p className="font-semibold text-center overflow-hidden">
+                    <p className="font-semibold overflow-hidden">
                       {songName}
                     </p>
 

@@ -45,7 +45,11 @@ export function Display() {
         />
       </div>
     );
-  } else if (media?.endsWith(".mp4") || media?.endsWith(".mov")) {
+  } else if (
+    media?.endsWith(".mp4") ||
+    media?.endsWith(".mov") ||
+    media?.endsWith(".m4v")
+  ) {
     return (
       <div className="h-svh max-w-full flex items-center justify-center">
         <video
