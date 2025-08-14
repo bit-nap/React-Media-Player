@@ -92,13 +92,13 @@ app.delete("/api/delete/:name", authMiddleware, (req, res) => {
 
   try {
     const files = fs.readdirSync(SETTINGS_DIR);
+    let foundInPlaylist = false;
+    let foundInAccounts = [];
 
     files.forEach((file) => {
-      const filePath = path.join(SETTINGS_DIR, file);
-
-      // Only process .json files
-      if (path.extname(filePath) !== ".json") return;
-      const data = fs.readFileSync(filePath, "utf-8");
+      const settingsFilePath = path.join(SETTINGS_DIR, file);
+      if (path.extname(settingsFilePath) !== ".json") return;
+      const data = fs.readFileSync(settingsFilePath, "utf-8");
       let json;
       try {
         json = JSON.parse(data);
@@ -106,29 +106,32 @@ app.delete("/api/delete/:name", authMiddleware, (req, res) => {
         console.error(`Invalid JSON in file ${file}:`, err);
         return;
       }
-
-      let modified = false;
       if (Array.isArray(json.playlists)) {
         json.playlists.forEach((playlist) => {
-          if (Array.isArray(playlist.songs)) {
-            const originalLength = playlist.songs.length;
-            playlist.songs = playlist.songs.filter((song) => song !== filename);
-            if (playlist.songs.length !== originalLength) {
-              modified = true;
-            }
+          if (
+            Array.isArray(playlist.songs) &&
+            playlist.songs.includes(filename)
+          ) {
+            foundInPlaylist = true;
+            foundInAccounts.push(
+              `${file.replace(/\.json$/, "")} : ${playlist}`
+            );
           }
         });
       }
-
-      if (modified) {
-        fs.writeFileSync(filePath, JSON.stringify(json, null, 2), "utf-8");
-      }
     });
+
+    if (foundInPlaylist) {
+      return res.status(403).json({
+        error: `File could not be deleted. It is present in one or more playlists. Remove it from all playlists first.`,
+        accounts: foundInAccounts,
+      });
+    }
   } catch (err) {
     console.error("Error processing files:", err);
-    res.status(500).json({
+    return res.status(500).json({
       error: "Internal server error",
-      message: "Failed to delete file from existing playlists",
+      message: "Failed to check file in playlists",
     });
   }
 
@@ -143,9 +146,9 @@ app.delete("/api/delete/:name", authMiddleware, (req, res) => {
     if (currentSelected === filename) {
       currentSelected = null;
     }
-    res.json({
+    return res.json({
       success: true,
-      message: `Deleted "${filename}" from all playlists.`,
+      message: `Deleted "${filename}".`,
     });
   });
 });
