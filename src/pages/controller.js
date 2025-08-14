@@ -167,9 +167,7 @@ export function Controller() {
           username: data.username,
         })
       );
-      setUserId(data.token);
-      setUsername(data.username);
-      fetchSelected();
+      window.location.reload();
     } catch (error) {
       alert("Login error: " + error.message);
     }
@@ -181,6 +179,7 @@ export function Controller() {
     setUserId("");
     setUsername("");
     setSelectedFile(null);
+    window.location.reload();
   };
 
   // Select file to display
@@ -230,10 +229,10 @@ export function Controller() {
           value={inputPassword}
           onChange={(e) => setInputPassword(e.target.value)}
         />
-        <div className="flex flex-row w-2/12 justify-center mt-1">
+        <div className="flex flex-row w-1/4 justify-center mt-1">
           <Input
             type="checkbox"
-            className="shrink-0 w-4 border-gray-200 rounded-sm text-blue-600 focus:ring-blue-500"
+            className="shrink-0 w-3 border-gray-200 rounded-sm text-blue-600 focus:ring-blue-500"
             value={passwordToggle}
             onChange={(e) => handlePasswordToggle(e.target.value)}
           />
